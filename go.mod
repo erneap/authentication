@@ -3,8 +3,7 @@ module github.com/erneap/authentication
 go 1.20
 
 require (
-	github.com/erneap/authentication/authentication-api v0.0.0-20230628030043-ff6772cc717f
-	github.com/erneap/go-models v0.0.0-20230628031930-b6b10cb72fb7
+	github.com/erneap/go-models v0.1.3
 	github.com/gin-gonic/gin v1.9.1
 	go.mongodb.org/mongo-driver v1.12.0
 )

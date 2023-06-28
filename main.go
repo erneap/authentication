@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/erneap/authentication/authentication-api/controllers"
+	"github.com/erneap/authentication/controllers"
 	"github.com/erneap/go-models/config"
 	"github.com/erneap/go-models/services"
 	"github.com/gin-gonic/gin"
