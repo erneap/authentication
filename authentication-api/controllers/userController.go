@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erneap/authentication/authentication-api/models/config"
-	"github.com/erneap/authentication/authentication-api/models/logs"
-	"github.com/erneap/authentication/authentication-api/models/users"
-	"github.com/erneap/authentication/authentication-api/models/web"
-	"github.com/erneap/authentication/authentication-api/services"
+	"github.com/erneap/go-models/logs"
+	"github.com/erneap/go-models/services"
+	"github.com/erneap/go-models/users"
+	"github.com/erneap/go-models/web"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"honnef.co/go/tools/config"
 )
 
 func Login(c *gin.Context) {
