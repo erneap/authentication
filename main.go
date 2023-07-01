@@ -5,7 +5,7 @@ import (
 
 	"github.com/erneap/authentication/controllers"
 	"github.com/erneap/go-models/config"
-	"github.com/erneap/go-models/services"
+	"github.com/erneap/go-models/svcs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,24 +19,29 @@ func main() {
 	router := gin.Default()
 	adminRoles := []string{"metrics-admin", "scheduler-scheduler",
 		"scheduler-siteleader", "scheduler-teamleader", "scheduler-admin"}
-	api := router.Group("/authentication/api/v1")
+	api := router.Group("/authentication/api/v2")
 	{
 		authenticate := api.Group("/authenticate")
 		{
 			authenticate.POST("/", controllers.Login)
-			authenticate.PUT("/", services.CheckJWT(), controllers.RenewToken)
-			authenticate.DELETE("/:userid", services.CheckJWT(), controllers.Logout)
+			authenticate.PUT("/", svcs.CheckJWT(), controllers.RenewToken)
+			authenticate.DELETE("/:userid", svcs.CheckJWT(), controllers.Logout)
 		}
 		user := api.Group("/user")
 		{
-			user.GET("/:userid", services.CheckRoleList(adminRoles),
+			user.GET("/:userid", svcs.CheckRoleList(adminRoles),
 				controllers.GetUser)
-			user.POST("/", services.CheckRoleList(adminRoles), controllers.AddUser)
-			user.PUT("/", services.CheckRoleList(adminRoles), controllers.UpdateUser)
-			user.DELETE("/:userid", services.CheckRoleList(adminRoles),
+			user.POST("/", svcs.CheckRoleList(adminRoles), controllers.AddUser)
+			user.PUT("/", svcs.CheckRoleList(adminRoles), controllers.UpdateUser)
+			user.DELETE("/:userid", svcs.CheckRoleList(adminRoles),
 				controllers.DeleteUser)
 		}
-		api.GET("/users", services.CheckRoleList(adminRoles), controllers.GetUsers)
+		reset := api.Group("/reset")
+		{
+			reset.POST("/", controllers.StartPasswordReset)
+			reset.PUT("/", controllers.PasswordReset)
+		}
+		api.GET("/users", svcs.CheckRoleList(adminRoles), controllers.GetUsers)
 	}
 
 	// listen on port 6000
