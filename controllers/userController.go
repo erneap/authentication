@@ -97,6 +97,10 @@ func RenewToken(c *gin.Context) {
 			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
 				logs.Minimal, err.Error())
 		}
+		c.JSON(http.StatusBadRequest, users.AuthenticationResponse{
+			Token:     "",
+			Exception: err.Error(),
+		})
 	}
 
 	// replace token by passing a new token in the response header
@@ -111,9 +115,10 @@ func RenewToken(c *gin.Context) {
 
 func Logout(c *gin.Context) {
 	id := c.Param("userid")
-	app := c.Param("applicaiton")
+	app := c.Param("applicaition")
 	loglevel, _ := strconv.Atoi(config.Config("LOGLEVEL"))
 
+	fmt.Printf("%s/%s logging out\n", id, app)
 	user, err := svcs.GetUserByID(id)
 	if err != nil {
 		msg := "GetUserByEmail Problem: " + err.Error()
@@ -125,7 +130,7 @@ func Logout(c *gin.Context) {
 		return
 	}
 
-	msg := fmt.Sprintf("User Login: %s logged into %s at %s", user.GetLastFirst(),
+	msg := fmt.Sprintf("User Logout: %s logged out of %s at %s", user.GetLastFirst(),
 		app, time.Now().Format("01/02/06 15:04"))
 	if loglevel >= int(logs.Minimal) {
 		svcs.CreateLogEntry(time.Now().UTC(), "authentication",

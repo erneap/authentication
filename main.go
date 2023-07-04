@@ -25,7 +25,7 @@ func main() {
 		{
 			authenticate.POST("/", controllers.Login)
 			authenticate.PUT("/", svcs.CheckJWT(), controllers.RenewToken)
-			authenticate.DELETE("/:userid", svcs.CheckJWT(), controllers.Logout)
+			authenticate.DELETE("/:userid/:application", svcs.CheckJWT(), controllers.Logout)
 		}
 		user := api.Group("/user")
 		{
