@@ -24,16 +24,18 @@ func main() {
 		authenticate := api.Group("/authenticate")
 		{
 			authenticate.POST("/", controllers.Login)
-			authenticate.PUT("/", svcs.CheckJWT(), controllers.RenewToken)
-			authenticate.DELETE("/:userid/:application", svcs.CheckJWT(), controllers.Logout)
+			authenticate.PUT("/", svcs.CheckJWT("authentication"),
+				controllers.RenewToken)
+			authenticate.DELETE("/:userid/:application",
+				svcs.CheckJWT("authentication"), controllers.Logout)
 		}
 		user := api.Group("/user")
 		{
-			user.GET("/:userid", svcs.CheckRoleList(adminRoles),
+			user.GET("/:userid", svcs.CheckRoleList("authentication", adminRoles),
 				controllers.GetUser)
-			user.POST("/", svcs.CheckRoleList(adminRoles), controllers.AddUser)
-			user.PUT("/", svcs.CheckRoleList(adminRoles), controllers.UpdateUser)
-			user.DELETE("/:userid", svcs.CheckRoleList(adminRoles),
+			user.POST("/", svcs.CheckRoleList("authentication", adminRoles), controllers.AddUser)
+			user.PUT("/", svcs.CheckRoleList("authentication", adminRoles), controllers.UpdateUser)
+			user.DELETE("/:userid", svcs.CheckRoleList("authentication", adminRoles),
 				controllers.DeleteUser)
 		}
 		reset := api.Group("/reset")
@@ -41,7 +43,7 @@ func main() {
 			reset.POST("/", controllers.StartPasswordReset)
 			reset.PUT("/", controllers.PasswordReset)
 		}
-		api.GET("/users", svcs.CheckRoleList(adminRoles), controllers.GetUsers)
+		api.GET("/users", svcs.CheckRoleList("authentication", adminRoles), controllers.GetUsers)
 	}
 
 	// listen on port 6000

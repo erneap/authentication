@@ -28,7 +28,7 @@ func Login(c *gin.Context) {
 
 	user, err := svcs.GetUserByEMail(data.EmailAddress)
 	if err != nil {
-		msg := "GetUserByEmail Problem: " + err.Error()
+		msg := "Email Address/Password mismatch"
 		if loglevel >= int(logs.Minimal) {
 			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
 				logs.Minimal, msg)
@@ -40,13 +40,7 @@ func Login(c *gin.Context) {
 	}
 
 	if err := user.Authenticate(data.Password); err != nil {
-		err := svcs.UpdateUser(*user)
-		if err != nil {
-			c.JSON(http.StatusNotFound,
-				users.AuthenticationResponse{
-					Token: "", Exception: "Problem Updating Database"})
-			return
-		}
+		svcs.UpdateUser(*user)
 		c.JSON(http.StatusUnauthorized,
 			users.AuthenticationResponse{
 				Token: "", Exception: err.Error()})
