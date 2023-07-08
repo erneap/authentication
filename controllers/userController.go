@@ -147,7 +147,7 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 
-	user, err := svcs.GetUserByID(data.UserID)
+	user, err := svcs.GetUserByID(data.ID)
 	if err != nil {
 		msg := "GetUserByID Problem: " + err.Error()
 		if loglevel >= int(logs.Minimal) {
@@ -161,6 +161,7 @@ func UpdateUser(c *gin.Context) {
 	switch strings.ToLower(data.Field) {
 	case "password":
 		user.SetPassword(data.Value)
+		user.ResetToken = ""
 	case "first", "firstname":
 		user.FirstName = data.Value
 	case "middle", "middlename":
@@ -296,8 +297,7 @@ func StartPasswordReset(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&data); err != nil {
 		c.JSON(http.StatusBadRequest,
-			users.AuthenticationResponse{
-				Token: "", Exception: "Trouble with request"})
+			users.ExceptionResponse{Exception: "Trouble with request"})
 		return
 	}
 
@@ -306,8 +306,8 @@ func StartPasswordReset(c *gin.Context) {
 		msg := "GetUserByEmail Problem: " + err.Error()
 		svcs.AddLogEntry("authentication", logs.Minimal, msg)
 		c.JSON(http.StatusNotFound,
-			users.AuthenticationResponse{Token: "",
-				Exception: msg})
+			users.ExceptionResponse{
+				Exception: "No User for Email Address"})
 		return
 	}
 
@@ -315,10 +315,25 @@ func StartPasswordReset(c *gin.Context) {
 	nToken := rand.Intn(999999)
 	sToken := fmt.Sprintf("%06d", nToken)
 
-	user.ResetToken = sToken
+	exp := time.Now().UTC().Add(time.Minute * time.Duration(30))
 
-	message := "You've been redirected to a reset password page.  Please use " +
-		"the following verification token in the appropriate input field: " + sToken
+	user.ResetToken = sToken
+	user.ResetTokenExp = &exp
+
+	err = svcs.UpdateUser(*user)
+	if err != nil {
+		svcs.AddLogEntry("authentication", logs.Minimal,
+			fmt.Sprintf("StartPasswordReset: UpdateUser: %s", err.Error()))
+		c.JSON(http.StatusNotFound,
+			users.ExceptionResponse{
+				Exception: "Problem Updating User: " + err.Error()})
+		return
+	}
+
+	message := "<html><body><h3>You've been redirected to a reset password page.  Please use " +
+		"the following verification token in the appropriate input field, " +
+		" along with a new password/verified to allow you to access this " +
+		"website again!</h3><br/><h2>" + sToken + "</h2></body></html>"
 
 	to := []string{
 		user.EmailAddress,
@@ -363,7 +378,16 @@ func PasswordReset(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, users.ExceptionResponse{Exception: msg})
 		return
 	}
+
+	if user.ResetTokenExp.Before(time.Now().UTC()) {
+		msg := "PasswordReset: Reset Token Expired"
+		svcs.AddLogEntry("authentication", logs.Debug, msg)
+		c.JSON(http.StatusBadRequest, users.ExceptionResponse{Exception: msg})
+		return
+	}
+
 	user.ResetToken = ""
+	user.ResetTokenExp = nil
 	user.BadAttempts = 0
 	user.SetPassword(data.Password)
 
