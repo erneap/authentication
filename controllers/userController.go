@@ -162,6 +162,7 @@ func UpdateUser(c *gin.Context) {
 	case "password":
 		user.SetPassword(data.Value)
 		user.ResetToken = ""
+		user.BadAttempts = 0
 	case "first", "firstname":
 		user.FirstName = data.Value
 	case "middle", "middlename":
