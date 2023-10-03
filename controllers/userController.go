@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/erneap/go-models/config"
-	"github.com/erneap/go-models/logs"
+	"github.com/erneap/authentication/services"
 	"github.com/erneap/go-models/svcs"
 	"github.com/erneap/go-models/users"
 	"github.com/gin-gonic/gin"
@@ -18,9 +16,10 @@ import (
 
 func Login(c *gin.Context) {
 	var data users.AuthenticationRequest
-	loglevel, _ := strconv.Atoi(config.Config("LOGLEVEL"))
 
 	if err := c.ShouldBindJSON(&data); err != nil {
+		services.AddLogEntry(c, "authenticate", "Debug", "Login",
+			fmt.Sprintf("Data Binding: %s", err.Error()))
 		c.JSON(http.StatusBadRequest,
 			users.AuthenticationResponse{Token: "", Exception: "Trouble with request"})
 		return
@@ -29,10 +28,8 @@ func Login(c *gin.Context) {
 	user, err := svcs.GetUserByEMail(data.EmailAddress)
 	if err != nil {
 		msg := "Email Address/Password mismatch"
-		if loglevel >= int(logs.Minimal) {
-			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-				logs.Minimal, msg)
-		}
+		services.AddLogEntry(c, "authenticate", "ERROR", "Login",
+			fmt.Sprintf("User Not Found: %s", data.EmailAddress))
 		c.JSON(http.StatusNotFound,
 			users.AuthenticationResponse{Token: "",
 				Exception: msg})
@@ -41,6 +38,8 @@ func Login(c *gin.Context) {
 
 	if err := user.Authenticate(data.Password); err != nil {
 		svcs.UpdateUser(*user)
+		services.AddLogEntry(c, "authenticate", "UNAUTHORIZED", "Login",
+			fmt.Sprintf("Password Mismatch: %s", data.EmailAddress))
 		c.JSON(http.StatusUnauthorized,
 			users.AuthenticationResponse{
 				Token: "", Exception: err.Error()})
@@ -48,6 +47,8 @@ func Login(c *gin.Context) {
 	}
 	err = svcs.UpdateUser(*user)
 	if err != nil {
+		services.AddLogEntry(c, "authenticate", "ERROR", "Login",
+			fmt.Sprintf("User Update Problem: %s", err.Error()))
 		c.JSON(http.StatusNotFound,
 			users.AuthenticationResponse{
 				Token: "", Exception: "Problem Updating Database"})
@@ -58,10 +59,8 @@ func Login(c *gin.Context) {
 	tokenstring, err := svcs.CreateToken(user.ID, user.EmailAddress)
 	if err != nil {
 		msg := "CreateToken Problem: " + err.Error()
-		if loglevel >= int(logs.Minimal) {
-			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-				logs.Minimal, msg)
-		}
+		services.AddLogEntry(c, "authenticate", "ERROR", "Login",
+			fmt.Sprintf("Create Token Problem: %s", err.Error()))
 		c.JSON(http.StatusNotFound,
 			users.AuthenticationResponse{Token: "",
 				Exception: msg})
@@ -70,10 +69,7 @@ func Login(c *gin.Context) {
 
 	msg := fmt.Sprintf("User Login: %s logged into %s at %s", user.GetLastFirst(),
 		data.Application, time.Now().Format("01/02/06 15:04"))
-	if loglevel >= int(logs.Minimal) {
-		svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-			logs.Minimal, msg)
-	}
+	services.AddLogEntry(c, "authenticate", "SUCCESS", "Login", msg)
 
 	c.JSON(http.StatusOK, users.AuthenticationResponse{
 		Token:     tokenstring,
@@ -83,14 +79,11 @@ func Login(c *gin.Context) {
 }
 
 func RenewToken(c *gin.Context) {
-	loglevel, _ := strconv.Atoi(config.Config("LOGLEVEL"))
 	tokenString := c.GetHeader("Authorization")
 	claims, err := svcs.ValidateToken(tokenString)
 	if err != nil {
-		if loglevel >= int(logs.Minimal) {
-			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-				logs.Minimal, err.Error())
-		}
+		services.AddLogEntry(c, "authenticate", "ERROR", "Login",
+			fmt.Sprintf("Renew Token Problem: %s", err.Error()))
 		c.JSON(http.StatusBadRequest, users.AuthenticationResponse{
 			Token:     "",
 			Exception: err.Error(),
@@ -110,38 +103,28 @@ func RenewToken(c *gin.Context) {
 func Logout(c *gin.Context) {
 	id := c.Param("userid")
 	app := c.Param("applicaition")
-	loglevel, _ := strconv.Atoi(config.Config("LOGLEVEL"))
 
 	fmt.Printf("%s/%s logging out\n", id, app)
 	user, err := svcs.GetUserByID(id)
 	if err != nil {
 		msg := "GetUserByEmail Problem: " + err.Error()
-		if loglevel >= int(logs.Minimal) {
-			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-				logs.Minimal, msg)
-		}
+		services.AddLogEntry(c, "authenticate", "ERROR", "Logout", msg)
 		c.JSON(http.StatusNotFound, users.ExceptionResponse{Exception: err.Error()})
 		return
 	}
 
 	msg := fmt.Sprintf("User Logout: %s logged out of %s at %s", user.GetLastFirst(),
 		app, time.Now().Format("01/02/06 15:04"))
-	if loglevel >= int(logs.Minimal) {
-		svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-			logs.Minimal, msg)
-	}
+	services.AddLogEntry(c, "authenticate", "LOGOUT", "Login", msg)
 	c.Status(http.StatusOK)
 }
 
 func UpdateUser(c *gin.Context) {
 	var data users.UpdateRequest
-	loglevel, _ := strconv.Atoi(config.Config("LOGLEVEL"))
 
 	if err := c.ShouldBindJSON(&data); err != nil {
-		if loglevel >= int(logs.Debug) {
-			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-				logs.Minimal, "Problem Binding JSON Object to UpdateUser")
-		}
+		services.AddLogEntry(c, "authenticate", "DEBUG", "UpdateUser",
+			fmt.Sprintf("Data Binding: %s", err.Error()))
 		c.JSON(http.StatusBadRequest,
 			users.UserResponse{User: users.User{}, Exception: "Trouble with request"})
 		return
@@ -150,10 +133,7 @@ func UpdateUser(c *gin.Context) {
 	user, err := svcs.GetUserByID(data.ID)
 	if err != nil {
 		msg := "GetUserByID Problem: " + err.Error()
-		if loglevel >= int(logs.Minimal) {
-			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-				logs.Minimal, msg)
-		}
+		services.AddLogEntry(c, "authenticate", "DEBUG", "UpdateUser", msg)
 		c.JSON(http.StatusNotFound, users.ExceptionResponse{Exception: msg})
 		return
 	}
@@ -199,26 +179,27 @@ func UpdateUser(c *gin.Context) {
 	err = svcs.UpdateUser(*user)
 	if err != nil {
 		msg := "UpdateUser Problem: " + err.Error()
-		if loglevel >= int(logs.Minimal) {
-			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-				logs.Minimal, msg)
-		}
+		services.AddLogEntry(c, "authenticate", "Debug", "UpdateUser", msg)
 		c.JSON(http.StatusBadRequest, users.ExceptionResponse{Exception: msg})
 		return
 	}
 
+	if strings.EqualFold(data.Field, "password") {
+		services.AddLogEntry(c, "authenticate", "UPDATE", "UpdateUser",
+			fmt.Sprintf("Update: %s = %s", data.Field, "XXXXXXXX"))
+	} else {
+		services.AddLogEntry(c, "authenticate", "UPDATE", "UpdateUser",
+			fmt.Sprintf("Update: %s = %s", data.Field, data.Value))
+	}
 	c.JSON(http.StatusOK, users.UserResponse{User: *user, Exception: ""})
 }
 
 func AddUser(c *gin.Context) {
 	var data users.AddUserRequest
-	loglevel, _ := strconv.Atoi(config.Config("LOGLEVEL"))
 
 	if err := c.ShouldBindJSON(&data); err != nil {
-		if loglevel >= int(logs.Debug) {
-			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-				logs.Minimal, "Problem Binding JSON Object to AddUser")
-		}
+		services.AddLogEntry(c, "authenticate", "Debug", "AddUser",
+			fmt.Sprintf("Data Binding Problem: %s", err.Error()))
 		c.JSON(http.StatusBadRequest,
 			users.UserResponse{User: users.User{}, Exception: "Trouble with request"})
 		return
@@ -236,45 +217,42 @@ func AddUser(c *gin.Context) {
 	}
 	err := svcs.UpdateUser(*user)
 	if err != nil {
-		if loglevel >= int(logs.Debug) {
-			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-				logs.Minimal, "Problem Binding JSON Object to AddUser")
-		}
+		services.AddLogEntry(c, "authenticate", "Debug", "AddUser",
+			fmt.Sprintf("UserUser Problem: %s", err.Error()))
 		c.JSON(http.StatusBadRequest,
 			users.UserResponse{User: users.User{}, Exception: "Trouble with request"})
 		return
 	}
+
+	services.AddLogEntry(c, "authenticate", "CREATE", "AddUser",
+		fmt.Sprintf("User Created: %s", data.EmailAddress))
 	c.JSON(http.StatusOK, users.UserResponse{User: *user, Exception: ""})
 }
 
 func DeleteUser(c *gin.Context) {
 	id := c.Param("userid")
-	loglevel, _ := strconv.Atoi(config.Config("LOGLEVEL"))
 
 	err := svcs.DeleteUser(id)
 	if err != nil {
 		msg := "DeleteUser Problem: " + err.Error()
-		if loglevel >= int(logs.Debug) {
-			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-				logs.Minimal, msg)
-		}
+
+		services.AddLogEntry(c, "authenticate", "Debug", "DeleteUser", msg)
 		c.JSON(http.StatusBadRequest, users.ExceptionResponse{Exception: msg})
 		return
 	}
+	services.AddLogEntry(c, "authenticate", "DELETE", "DeleteUser",
+		fmt.Sprintf("User Deleted: %s", id))
 	c.Status(http.StatusOK)
 }
 
 func GetUser(c *gin.Context) {
 	id := c.Param("userid")
-	loglevel, _ := strconv.Atoi(config.Config("LOGLEVEL"))
 
 	user, err := svcs.GetUserByID(id)
 	if err != nil {
 		msg := "GetUser Problem: " + err.Error()
-		if loglevel >= int(logs.Minimal) {
-			svcs.CreateLogEntry(time.Now().UTC(), "authentication",
-				logs.Minimal, msg)
-		}
+
+		services.AddLogEntry(c, "authenticate", "Debug", "GetUser", msg)
 		c.JSON(http.StatusBadRequest, users.ExceptionResponse{Exception: msg})
 		return
 	}
@@ -286,7 +264,8 @@ func GetUsers(c *gin.Context) {
 	usrs, err := svcs.GetUsers()
 	if err != nil {
 		msg := "GetUsers Problem: " + err.Error()
-		svcs.AddLogEntry("authentication", logs.Minimal, msg)
+
+		services.AddLogEntry(c, "authenticate", "Debug", "GetUsers", msg)
 		c.JSON(http.StatusBadRequest, users.ExceptionResponse{Exception: msg})
 		return
 	}
@@ -297,6 +276,8 @@ func StartPasswordReset(c *gin.Context) {
 	var data users.AuthenticationRequest
 
 	if err := c.ShouldBindJSON(&data); err != nil {
+		services.AddLogEntry(c, "authenticate", "Debug", "StartPasswordReset",
+			fmt.Sprintf("Data Binding Problem: %s", err.Error()))
 		c.JSON(http.StatusBadRequest,
 			users.ExceptionResponse{Exception: "Trouble with request"})
 		return
@@ -305,7 +286,8 @@ func StartPasswordReset(c *gin.Context) {
 	user, err := svcs.GetUserByEMail(data.EmailAddress)
 	if err != nil {
 		msg := "GetUserByEmail Problem: " + err.Error()
-		svcs.AddLogEntry("authentication", logs.Minimal, msg)
+
+		services.AddLogEntry(c, "authenticate", "Debug", "StartPasswordReset", msg)
 		c.JSON(http.StatusNotFound,
 			users.ExceptionResponse{
 				Exception: "No User for Email Address"})
@@ -323,7 +305,7 @@ func StartPasswordReset(c *gin.Context) {
 
 	err = svcs.UpdateUser(*user)
 	if err != nil {
-		svcs.AddLogEntry("authentication", logs.Minimal,
+		services.AddLogEntry(c, "authenticate", "Debug", "StartPasswordReset",
 			fmt.Sprintf("StartPasswordReset: UpdateUser: %s", err.Error()))
 		c.JSON(http.StatusNotFound,
 			users.ExceptionResponse{
@@ -345,7 +327,7 @@ func StartPasswordReset(c *gin.Context) {
 	err = svcs.SendMail(to, subject, message)
 	if err != nil {
 		msg := "StartPasswordReset: SendMail: " + err.Error()
-		svcs.AddLogEntry("authentication", logs.Minimal, msg)
+		services.AddLogEntry(c, "authenticate", "Debug", "StartPasswordReset", msg)
 		c.JSON(http.StatusBadRequest, users.ExceptionResponse{Exception: msg})
 		return
 	}
@@ -356,8 +338,8 @@ func PasswordReset(c *gin.Context) {
 	var data users.PasswordResetRequest
 
 	if err := c.ShouldBindJSON(&data); err != nil {
-		svcs.AddLogEntry("authentication", logs.Debug,
-			"PasswordRequest: BindJSON: Trouble with request")
+		services.AddLogEntry(c, "authenticate", "Debug", "PasswordReset",
+			fmt.Sprintf("Data Binding Problem: %s", err.Error()))
 		c.JSON(http.StatusBadRequest,
 			users.AuthenticationResponse{
 				Token: "", Exception: "Trouble with request"})
@@ -367,7 +349,7 @@ func PasswordReset(c *gin.Context) {
 	user, err := svcs.GetUserByEMail(data.EmailAddress)
 	if err != nil {
 		msg := "PasswordReset: GetUserByEmail Problem: " + err.Error()
-		svcs.AddLogEntry("authentication", logs.Minimal, msg)
+		services.AddLogEntry(c, "authenticate", "Debug", "PasswordReset", msg)
 		c.JSON(http.StatusNotFound,
 			users.ExceptionResponse{Exception: msg})
 		return
@@ -375,14 +357,14 @@ func PasswordReset(c *gin.Context) {
 
 	if !strings.EqualFold(user.ResetToken, data.Token) {
 		msg := "PasswordReset: Bad Reset Token"
-		svcs.AddLogEntry("authentication", logs.Debug, msg)
+		services.AddLogEntry(c, "authenticate", "Debug", "PasswordReset", msg)
 		c.JSON(http.StatusBadRequest, users.ExceptionResponse{Exception: msg})
 		return
 	}
 
 	if user.ResetTokenExp.Before(time.Now().UTC()) {
 		msg := "PasswordReset: Reset Token Expired"
-		svcs.AddLogEntry("authentication", logs.Debug, msg)
+		services.AddLogEntry(c, "authenticate", "Debug", "PasswordReset", msg)
 		c.JSON(http.StatusBadRequest, users.ExceptionResponse{Exception: msg})
 		return
 	}
@@ -394,6 +376,8 @@ func PasswordReset(c *gin.Context) {
 
 	err = svcs.UpdateUser(*user)
 	if err != nil {
+		services.AddLogEntry(c, "authenticate", "Debug", "PasswordReset",
+			fmt.Sprintf("Update User Problem: %s", err.Error()))
 		c.JSON(http.StatusBadRequest,
 			users.AuthenticationResponse{
 				Token: "", Exception: "PasswordReset: Problem Updating Database"})
@@ -404,7 +388,7 @@ func PasswordReset(c *gin.Context) {
 	tokenstring, err := svcs.CreateToken(user.ID, user.EmailAddress)
 	if err != nil {
 		msg := "PasswordReset: CreateToken Problem: " + err.Error()
-		svcs.AddLogEntry("authentication", logs.Debug, msg)
+		services.AddLogEntry(c, "authenticate", "Debug", "PasswordReset", msg)
 		c.JSON(http.StatusNotFound,
 			users.AuthenticationResponse{Token: "",
 				Exception: msg})
@@ -412,7 +396,7 @@ func PasswordReset(c *gin.Context) {
 	}
 	msg := fmt.Sprintf("User Login: %s logged into %s at %s", user.GetLastFirst(),
 		data.Application, time.Now().Format("01/02/06 15:04"))
-	svcs.AddLogEntry("authentication", logs.Minimal, msg)
+	services.AddLogEntry(c, "authenticate", "SUCCESS", "PasswordReset", msg)
 
 	c.JSON(http.StatusOK, users.AuthenticationResponse{
 		Token:     tokenstring,
