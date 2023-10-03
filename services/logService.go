@@ -15,7 +15,7 @@ import (
 
 func AddLogEntry(c *gin.Context, portion, category, title, msg string) error {
 	empID := svcs.GetRequestor(c)
-	name := empID
+	name := ""
 	site := "General"
 	emp, err := GetEmployee(empID)
 	if err == nil {
@@ -27,16 +27,20 @@ func AddLogEntry(c *gin.Context, portion, category, title, msg string) error {
 	logLevel, _ := strconv.Atoi(os.Getenv("LOGLEVEL"))
 
 	if logLevel < 1 || !strings.EqualFold(category, "debug") {
-		logPath := path.Join(logBase, site, portion, fmt.Sprintf("%d", chgDate.Year()))
+		logPath := path.Join(logBase, site, portion)
 		if err := os.MkdirAll(logPath, 0755); err != nil {
 			return err
 		}
 
-		logPath = path.Join(logPath, fmt.Sprintf("%s.log", portion))
+		logPath = path.Join(logPath, fmt.Sprintf("%s-%d.log", portion, chgDate.Year()))
 
-		entry := chgDate.Format("2006-01-02T15:04:05-0700") + "\tBy: " + name +
-			strings.ToUpper(category) + "\n" + strings.ToUpper(title) + "\n" +
-			msg + "\n\n"
+		entry := chgDate.UTC().Format("060102T150405Z") + "\t(" +
+			strings.ToUpper(category) + ") " + strings.ToUpper(title) + "\t" +
+			msg
+		if name != "" {
+			entry += fmt.Sprintf("(%s)", name)
+		}
+		entry += "\n"
 
 		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
@@ -62,12 +66,12 @@ func GetLogEntries(c *gin.Context, portion string, year int) ([]string, error) {
 		site = "General"
 	}
 
-	logPath := path.Join(logBase, site, portion, fmt.Sprintf("%d", year))
+	logPath := path.Join(logBase, site, portion)
 	if err := os.MkdirAll(logPath, 0755); err != nil {
 		return nil, err
 	}
 
-	logPath = path.Join(logPath, fmt.Sprintf("%s.log", portion))
+	logPath = path.Join(logPath, fmt.Sprintf("%s-%d.log", portion, year))
 
 	if _, err := os.Stat(logPath); errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("%s does not exist", logPath)
