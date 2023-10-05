@@ -16,6 +16,8 @@ COPY . .
 # compile the application
 RUN go build -o /authentication
 
+ADD . /data/logs
+
 # expose the network port for runtime access
 EXPOSE 6000
 
