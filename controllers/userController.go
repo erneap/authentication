@@ -153,6 +153,9 @@ func UpdateUser(c *gin.Context) {
 		user.EmailAddress = data.Value
 	case "unlock":
 		user.BadAttempts = 0
+	case "5days":
+		user.BadAttempts = 0
+		user.PasswordExpires = time.Now().UTC().AddDate(0, 0, 5)
 	case "addperm", "addworkgroup", "addpermission":
 		found := false
 		for _, perm := range user.Workgroups {
