@@ -1,25 +1,47 @@
-# specify the base image to be used for this application
-FROM golang:1.19.4-alpine3.17
+##############################
+# Step 1 build executable binary
+##############################
+FROM golang:alpine AS builder
 
-# create a working directory inside the image
-WORKDIR /app
+## Install git
+RUN apk update && apk add --no-cache git
 
-# copy the go modules and dependencies
-COPY go.mod ./
+ENV USER=scheduler
+ENV UID=10001
 
-# download necessary GO modules and dependencies
-RUN go mod download
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    "${USER}"
 
-# copy the the files to the directory
+WORKDIR $GOPATH/src/scheduler2/authentication-api/
 COPY . .
 
-# compile the application
-RUN go build -o /authentication
+# Fetch Dependencies
+RUN go get -d -v
 
+# build binary
+RUN go build -o /go/bin/authentication-api
+
+################################
+# Step 2 Build the small image
+################################
+FROM scratch
+
+ADD . /data/reports
 ADD . /data/logs
 
-# expose the network port for runtime access
-EXPOSE 6000
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
 
-# command used to execute the api 
-CMD [ "/authentication" ]
+COPY --from=builder /go/bin/authentication-api /go/bin/authentication-api
+
+USER scheduler:scheduler
+
+EXPOSE 6002
+
+ENTRYPOINT [ "/go/bin/authentication-api" ]
