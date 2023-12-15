@@ -30,7 +30,9 @@ RUN go build -o /go/bin/authentication-api
 ################################
 # Step 2 Build the small image
 ################################
-FROM scratch
+FROM debian:bookworm-slim
+
+RUN apt update && apt install ca-certificates -y
 
 ADD . /data/reports
 ADD . /data/logs
